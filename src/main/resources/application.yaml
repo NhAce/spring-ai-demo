@@ -32,3 +32,44 @@ server:
       charset: UTF-8
       force: true
       force-response: true
+
+# ==================== 招投标日报定时任务（新增，不动以上任何配置） ====================
+# 流水线：确定性采集（水位线增量翻页）→ SQLite 唯一键去重落库 →
+#        LLM 固定输入汇总（结果缓存）→ 飞书推送（批次状态机，已推送不重发）
+bid:
+  daily:
+    # 总开关
+    enabled: true
+    # 每天 09:00 执行（Spring 6 位 cron：秒 分 时 日 月 周）
+    cron: "0 0 9 * * ?"
+    # 相关性过滤关键词（逗号分隔）
+    keywords: 北斗,智能车载
+    # 每个站点最多翻页数（页面发布日期低于水位线后提前停止）
+    max-pages-per-source: 3
+    # SQLite 文件路径（库表自动创建）
+    db-path: ./data/bid_daily.db
+    # 无相关公告时是否推送一条“今日无新增”心跳消息
+    push-empty-report: true
+    feishu:
+      # 飞书群自定义机器人 webhook 地址，留空则只入库不推送
+      webhook: ""
+      # 机器人开启“签名校验”时填写密钥，否则留空
+      secret: ""
+    llm:
+      # 复用百炼 OpenAI 兼容端点；注意：此模型不带 enable_search，输入固定，输出可缓存
+      base-url: ${spring.ai.openai.chat.base-url}
+      api-key: ${spring.ai.openai.chat.api-key}
+      model: qwen-plus
+      temperature: 0.1
+      # 提示词版本：调整提示词后递增版本号才会重新生成汇总
+      prompt-version: v1
+    sources:
+      - name: 中国政府采购网-公开招标公告
+        first-page-url: http://www.ccgp.gov.cn/cggg/zygg/gkzb/index.htm
+        page-url-template: http://www.ccgp.gov.cn/cggg/zygg/gkzb/index_{page}.htm
+        encoding: GBK
+        item-selector: "ul.c_list_bid li"
+        title-selector: "a"
+        link-selector: "a"
+        date-selector: "em"
+        enabled: true
